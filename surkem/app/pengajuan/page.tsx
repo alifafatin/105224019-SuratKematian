@@ -1,26 +1,38 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useSyncExternalStore, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import BadgeStatus from '@/components/BadgeStatus';
 import {
   findRTRWOfficer,
-  addReport,
+  getWargaSession,
+  subscribeToUserSession,
 } from '@/lib/mockData';
 import { deathReportFormSchema } from '@/lib/schemas/death-report';
 import { DeathReport, RTRWOfficer, AuthMethod } from '@/types';
+import { saveDeathReport } from '@/lib/report-actions';
 
 interface FormErrors {
   reporterName?: string;
   reporterNik?: string;
   reporterContact?: string;
+  relation?: string;
   deceasedName?: string;
   deceasedNik?: string;
+  timeOfDeath?: string;
+  placeOfDeath?: string;
   dateOfDeath?: string;
+  dateOfBirth?: string;
   causeOfDeath?: string;
   address?: string;
+  rt?: string;
+  rw?: string;
+  kelurahan?: string;
+  kecamatan?: string;
+  city?: string;
+  documents?: string;
   consent?: string;
 }
 
@@ -28,26 +40,43 @@ const formErrorInputIds: Record<keyof FormErrors, string> = {
   reporterName: 'reporterName-input',
   reporterNik: 'reporterNik-input',
   reporterContact: 'contactInput-input',
+  relation: 'relation-select',
   deceasedName: 'deceasedName-input',
   deceasedNik: 'deceasedNik-input',
+  timeOfDeath: 'timeOfDeath-input',
+  placeOfDeath: 'placeOfDeath-input',
   dateOfDeath: 'dateOfDeath-input',
+  dateOfBirth: 'dateOfBirth-input',
   causeOfDeath: 'causeOfDeath-input',
   address: 'address-input',
+  rt: 'rt-select',
+  rw: 'rw-select',
+  kelurahan: 'kelurahan-select',
+  kecamatan: 'kelurahan-select',
+  city: 'kelurahan-select',
+  documents: 'ktp-deceased-file',
   consent: 'privacy-consent-checkbox',
 };
 
 function ReporterPortalContent() {
   const searchParams = useSearchParams();
-  const initialContact = searchParams.get('contact') || '081223344556';
+  const initialContact = searchParams.get('contact') || '';
   const initialAuth: AuthMethod =
     searchParams.get('auth') === 'email' ? 'email' : 'whatsapp';
+  const wargaSession = useSyncExternalStore(
+    subscribeToUserSession,
+    getWargaSession,
+    () => null
+  );
 
   // Step 1: Authentication & Reporter Identity
   const authMethod = initialAuth;
-  const [contactInput, setContactInput] = useState(initialContact);
-  const [reporterName, setReporterName] = useState('Rian Pratama');
-  const [reporterNik, setReporterNik] = useState('3273012508920003');
-  const [relation, setRelation] = useState('Anak Kandung');
+  const [contactOverride, setContactOverride] = useState<string | null>(null);
+  const [reporterNameOverride, setReporterNameOverride] = useState<string | null>(null);
+  const contactInput = contactOverride ?? (initialContact || wargaSession?.phone || '');
+  const reporterName = reporterNameOverride ?? wargaSession?.name ?? '';
+  const [reporterNik, setReporterNik] = useState('');
+  const [relation, setRelation] = useState('');
 
   // Step 2: Deceased Data
   const [deceasedName, setDeceasedName] = useState('');
@@ -55,94 +84,44 @@ function ReporterPortalContent() {
   const [gender, setGender] = useState<'Laki-laki' | 'Perempuan'>('Laki-laki');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [dateOfDeath, setDateOfDeath] = useState('');
-  const [timeOfDeath, setTimeOfDeath] = useState('10:00');
-  const [placeOfDeath, setPlaceOfDeath] = useState('Rumah Tinggal');
+  const [timeOfDeath, setTimeOfDeath] = useState('');
+  const [placeOfDeath, setPlaceOfDeath] = useState('');
   const [causeOfDeath, setCauseOfDeath] = useState('');
 
   // Step 3: Address & RT/RW Routing State
-  const [address, setAddress] = useState('Jl. Merdeka No. 88');
+  const [address, setAddress] = useState('');
   const [kelurahan, setKelurahan] = useState('Kelurahan Merdeka');
   const [rt, setRt] = useState('03');
   const [rw, setRw] = useState('05');
-  const kecamatan = 'Kecamatan Sumur Bandung';
   const [assignedOfficer, setAssignedOfficer] = useState<RTRWOfficer>(() =>
-    findRTRWOfficer('Kelurahan Merdeka', '03', '05')
+    findRTRWOfficer('03', '05', 'Kelurahan Merdeka')
   );
 
-  // Step 4: Documents & AI Optical Verification
+  // Step 4: Document file names
   const [docs, setDocs] = useState<{
     ktpDeceased: string | null;
     kkDeceased: string | null;
     hospitalLetter: string | null;
   }>({
-    ktpDeceased: 'ktp_almarhum_scan.pdf',
-    kkDeceased: 'kartu_keluarga_asli.pdf',
-    hospitalLetter: 'surat_kematian_puskesmas.pdf',
+    ktpDeceased: null,
+    kkDeceased: null,
+    hospitalLetter: null,
   });
-
-  const [aiChecking, setAiChecking] = useState(false);
-  const [aiResult, setAiResult] = useState<{
-    overallConfidence: number;
-    ocrConfidence: number;
-    faceClarity: number;
-    signatureDetected: boolean;
-    notes: string;
-  } | null>({
-    overallConfidence: 98.5,
-    ocrConfidence: 99.1,
-    faceClarity: 97.4,
-    signatureDetected: true,
-    notes: '✅ KTP & KK NIK Matched with 98.5% Confidence. Cap basah RS terverifikasi.',
-  });
-
-  // Cryptographic state
-  const encryptionStatus = {
-    algorithm: 'AES-256-GCM',
-    keyBits: 256,
-    ivHex: '7d89ab10ef34567890abcdef',
-    integrityHash: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
-    isEncrypted: true,
-  };
 
   const [consentAgreed, setConsentAgreed] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedReport, setSubmittedReport] = useState<DeathReport | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [demoFillToast, setDemoFillToast] = useState(false);
 
   // Dynamic RT/RW routing change
   const handleAddressRoutingChange = (newKel: string, newRt: string, newRw: string) => {
     setKelurahan(newKel);
     setRt(newRt);
     setRw(newRw);
-    const officer = findRTRWOfficer(newKel, newRt, newRw);
+    const officer = findRTRWOfficer(newRt, newRw, newKel);
     setAssignedOfficer(officer);
-  };
-
-  // Simulate AI document scan with ethical fallback (<95%)
-  const triggerAiDocCheck = (scenario: 'optimal' | 'suboptimal' = 'optimal') => {
-    setAiChecking(true);
-    setTimeout(() => {
-      setAiChecking(false);
-      if (scenario === 'suboptimal') {
-        setAiResult({
-          overallConfidence: 91.2,
-          ocrConfidence: 89.4,
-          faceClarity: 88.0,
-          signatureDetected: true,
-          notes: '⚠️ Kualitas pemindaian dokumen 91.2% (< 95%). Resolusi stempel rumah sakit rendah/buram.',
-        });
-      } else {
-        setAiResult({
-          overallConfidence: 98.8,
-          ocrConfidence: 99.4,
-          faceClarity: 98.1,
-          signatureDetected: true,
-          notes: '✅ KTP & KK NIK Matched with 98.8% Confidence. Cap basah dan tanda tangan medis valid.',
-        });
-      }
-    }, 600);
   };
 
   const clearFieldError = (field: keyof FormErrors) => {
@@ -159,18 +138,33 @@ function ReporterPortalContent() {
       reporterNik,
       reporterContact: contactInput,
       authMethod,
+      relation,
       deceasedName,
       deceasedNik,
       dateOfDeath,
       causeOfDeath,
       address,
+      dateOfBirth,
+      gender,
+      timeOfDeath,
+      placeOfDeath,
+      rt,
+      rw,
+      kelurahan,
+      kecamatan: assignedOfficer.kecamatan,
+      city: assignedOfficer.city,
+      documentNames: {
+        ktpDeceasedName: docs.ktpDeceased || '',
+        kkDeceasedName: docs.kkDeceased || '',
+        hospitalLetterName: docs.hospitalLetter || '',
+      },
       consent: consentAgreed,
     });
 
     if (!result.success) {
       const newErrors: FormErrors = {};
       for (const issue of result.error.issues) {
-        const field = issue.path[0];
+        const field = issue.path[0] === 'documentNames' ? 'documents' : issue.path[0];
         if (
           typeof field === 'string' &&
           Object.prototype.hasOwnProperty.call(formErrorInputIds, field) &&
@@ -181,7 +175,8 @@ function ReporterPortalContent() {
       }
 
       setErrors(newErrors);
-      const firstInvalidField = result.error.issues[0]?.path[0];
+      const pathField = result.error.issues[0]?.path[0];
+      const firstInvalidField = pathField === 'documentNames' ? 'documents' : pathField;
       if (
         typeof firstInvalidField === 'string' &&
         Object.prototype.hasOwnProperty.call(formErrorInputIds, firstInvalidField)
@@ -198,94 +193,61 @@ function ReporterPortalContent() {
   };
 
   // Form submission handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-
-    setTimeout(() => {
-      const randomIdSuffix = Math.floor(100 + Math.random() * 900);
-      const reportId = `SK-2026-00${randomIdSuffix}`;
-
-      const newReport: DeathReport = {
-        id: reportId,
-        reporter: {
-          name: reporterName,
-          nik: reporterNik || '3273010000000000',
-          email: authMethod === 'email' ? contactInput : 'pelapor@gmail.com',
-          phone: authMethod === 'whatsapp' ? contactInput : '081234567890',
-          relation,
-          authMethod,
-          isVerified: true,
-          verifiedAt: new Date().toLocaleString('id-ID'),
-        },
-        deceased: {
-          fullName: deceasedName,
-          nik: deceasedNik,
-          gender,
-          dateOfBirth: dateOfBirth || '1960-01-01',
-          dateOfDeath,
-          timeOfDeath,
-          causeOfDeath,
-          placeOfDeath,
-          address,
-          rt: rt.padStart(2, '0'),
-          rw: rw.padStart(2, '0'),
-          kelurahan,
-          kecamatan,
-          city: 'Kota Bandung',
-        },
-        status: 'AWAITING_RTRW_APPROVAL',
-        assignedRTRW: assignedOfficer,
-        submittedAt: new Date().toLocaleString('id-ID') + ' WIB',
-        documents: {
-          ktpDeceasedName: docs.ktpDeceased || 'ktp_almarhum_encrypted.bin',
-          kkDeceasedName: docs.kkDeceased || 'kartu_keluarga_encrypted.bin',
-          hospitalLetterName: docs.hospitalLetter || 'surat_rs_encrypted.bin',
-          ktpReporterName: 'ktp_pelapor_encrypted.bin',
-          encryptionAlgorithm: 'AES-256-GCM',
-          payloadHashAes256Gcm: encryptionStatus.integrityHash,
-          ivHex: encryptionStatus.ivHex,
-          encryptionTimestamp: new Date().toISOString(),
-          aiVerification: aiResult
-            ? {
-                ...aiResult,
-                nikMatch: true,
-                status: aiResult.overallConfidence >= 95 ? 'VERIFIED' : 'NEEDS_REVIEW',
-              }
-            : undefined,
-        },
-        notes:
-          aiResult && aiResult.overallConfidence < 95
-            ? `Pengajuan baru oleh ${reporterName}. Dialihkan ke Verifikasi Manual RT/RW karena keyakinan AI di bawah 95% (${aiResult.overallConfidence}%). Otomatis diteruskan ke pengurus ${assignedOfficer.officerName}.`
-            : `Pengajuan baru oleh ${reporterName}. Otomatis diteruskan ke pengurus ${assignedOfficer.officerName}.`,
-      };
-
-      addReport(newReport);
-      setSubmittedReport(newReport);
-      setIsSubmitting(false);
-      setShowReceiptModal(true);
-    }, 900);
-  };
-
-  // One-Click Auto-Fill Demo Data Button
-  const handleQuickFill = () => {
-    setDeceasedName('Raden Mas Soewondo');
-    setDeceasedNik('3273011902450007');
-    setGender('Laki-laki');
-    setDateOfBirth('1945-02-19');
-    setDateOfDeath('2026-10-14');
-    setTimeOfDeath('08:30');
-    setPlaceOfDeath('Rumah Sakit Hasan Sadikin (RSHS)');
-    setCauseOfDeath('Komplikasi Penyakit Dalam & Usia Lanjut');
-    setAddress('Jl. Merdeka No. 104');
-    handleAddressRoutingChange('Kelurahan Merdeka', '03', '05');
-    setConsentAgreed(true);
-    setErrors({});
-    setDemoFillToast(true);
-    setTimeout(() => setDemoFillToast(false), 3500);
+    setSubmitError(null);
+    const result = await saveDeathReport({
+      reporterName,
+      reporterNik,
+      reporterContact: contactInput,
+      authMethod,
+      relation,
+      deceasedName,
+      deceasedNik,
+      gender,
+      dateOfBirth,
+      dateOfDeath,
+      timeOfDeath,
+      placeOfDeath,
+      causeOfDeath,
+      address,
+      rt: rt.padStart(2, '0'),
+      rw: rw.padStart(2, '0'),
+      kelurahan,
+      kecamatan: assignedOfficer.kecamatan,
+      city: assignedOfficer.city,
+      assignedRTRW: assignedOfficer,
+      documentNames: {
+        ktpDeceasedName: docs.ktpDeceased || '',
+        kkDeceasedName: docs.kkDeceased || '',
+        hospitalLetterName: docs.hospitalLetter || '',
+      },
+      consent: true,
+    });
+    setIsSubmitting(false);
+    if (!result.data) {
+      if (result.fieldErrors) {
+        const serverErrors: FormErrors = {};
+        for (const [field, message] of Object.entries(result.fieldErrors)) {
+          if (Object.prototype.hasOwnProperty.call(formErrorInputIds, field)) {
+            serverErrors[field as keyof FormErrors] = message;
+          }
+        }
+        setErrors(serverErrors);
+        const firstInvalidField = Object.keys(serverErrors)[0] as keyof FormErrors | undefined;
+        if (firstInvalidField) {
+          document.getElementById(formErrorInputIds[firstInvalidField])?.focus();
+        }
+      }
+      setSubmitError(result.error || 'Pengajuan gagal disimpan.');
+      return;
+    }
+    setSubmittedReport(result.data);
+    setShowReceiptModal(true);
   };
 
   return (
@@ -308,35 +270,16 @@ function ReporterPortalContent() {
             Formulir Pelaporan Kematian Digital
           </h1>
           <p className="mt-1 text-sm text-slate-700 max-w-3xl leading-relaxed">
-            Isi rincian peristiwa duka. Data identitas dilindungi enkripsi client-side <strong className="text-slate-900 font-semibold">AES-256-GCM</strong> sebelum diteruskan ke Ketua RT/RW dan Dinas Dukcapil.
+            Isi data pelapor dan peristiwa secara lengkap. Setelah dikirim, data formulir disimpan di database untuk ditinjau petugas.
           </p>
-        </div>
-
-        {/* Demo Auto-Fill Button */}
-        <div className="shrink-0 flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            onClick={handleQuickFill}
-            aria-label="Isi formulir dengan data contoh otomatis"
-            className="border-indigo-600 text-indigo-900 bg-indigo-50/50 hover:bg-indigo-100 font-semibold shadow-xs"
+          <Link
+            href="/profil-warga"
+            className="mt-3 inline-flex text-sm font-semibold text-blue-700 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-blue-700"
           >
-            ⚡ Isi Contoh Otomatis (Demo)
-          </Button>
+            Kelola profil warga
+          </Link>
         </div>
       </div>
-
-      {demoFillToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-6 p-3 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-medium flex items-center gap-2 shadow-xs"
-        >
-          <span className="text-emerald-800 font-bold">✓</span>
-          <span>Data demo (Raden Mas Soewondo, NIK: 3273011902450007) berhasil diisikan ke formulir!</span>
-        </div>
-      )}
 
       {/* Grid: Form Left, Crypto & RT/RW Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -377,7 +320,7 @@ function ReporterPortalContent() {
                   required
                   value={reporterName}
                   onChange={(e) => {
-                    setReporterName(e.target.value);
+                    setReporterNameOverride(e.target.value);
                     clearFieldError('reporterName');
                   }}
                   aria-invalid={errors.reporterName ? 'true' : 'false'}
@@ -436,7 +379,7 @@ function ReporterPortalContent() {
                   required
                   value={contactInput}
                   onChange={(e) => {
-                    setContactInput(e.target.value);
+                    setContactOverride(e.target.value);
                     clearFieldError('reporterContact');
                   }}
                   aria-invalid={errors.reporterContact ? 'true' : 'false'}
@@ -461,15 +404,23 @@ function ReporterPortalContent() {
                   id="relation-select"
                   name="relation"
                   value={relation}
-                  onChange={(e) => setRelation(e.target.value)}
+                  onChange={(e) => {
+                    setRelation(e.target.value);
+                    clearFieldError('relation');
+                  }}
+                  aria-invalid={errors.relation ? 'true' : 'false'}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 >
+                  <option value="">Pilih hubungan keluarga</option>
                   <option value="Anak Kandung">Anak Kandung</option>
                   <option value="Pasangan (Suami/Istri)">Pasangan (Suami/Istri)</option>
                   <option value="Orang Tua">Orang Tua</option>
                   <option value="Saudara Kandung">Saudara Kandung</option>
                   <option value="Kerabat / Kuasa Keluarga">Kerabat / Kuasa Keluarga</option>
                 </select>
+                {errors.relation && (
+                  <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{errors.relation}</p>
+                )}
               </div>
             </div>
           </section>
@@ -549,7 +500,7 @@ function ReporterPortalContent() {
                   </div>
                 </div>
                 <p id="deceasedNik-hint" className="mt-1 text-[11px] text-slate-600">
-                  Data NIK dienkripsi client-side (AES-256) dan 4 digit terakhir digunakan sebagai PIN unduh.
+                  NIK dicatat sebagai bagian dari data pengajuan. Enkripsi belum diterapkan pada tahap ini.
                 </p>
                 {errors.deceasedNik && (
                   <p id="deceasedNik-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
@@ -589,9 +540,19 @@ function ReporterPortalContent() {
                   name="dateOfBirth"
                   type="date"
                   value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  onChange={(e) => {
+                    setDateOfBirth(e.target.value);
+                    clearFieldError('dateOfBirth');
+                  }}
+                  aria-invalid={errors.dateOfBirth ? 'true' : 'false'}
+                  aria-describedby={errors.dateOfBirth ? 'dateOfBirth-error' : undefined}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 />
+                {errors.dateOfBirth && (
+                  <p id="dateOfBirth-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                    {errors.dateOfBirth}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -633,10 +594,18 @@ function ReporterPortalContent() {
                   id="timeOfDeath-input"
                   name="timeOfDeath"
                   type="time"
+                  required
                   value={timeOfDeath}
-                  onChange={(e) => setTimeOfDeath(e.target.value)}
+                  onChange={(e) => {
+                    setTimeOfDeath(e.target.value);
+                    clearFieldError('timeOfDeath');
+                  }}
+                  aria-invalid={errors.timeOfDeath ? 'true' : 'false'}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 />
+                {errors.timeOfDeath && (
+                  <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{errors.timeOfDeath}</p>
+                )}
               </div>
 
               <div>
@@ -650,11 +619,19 @@ function ReporterPortalContent() {
                   id="placeOfDeath-input"
                   name="placeOfDeath"
                   type="text"
+                  required
                   value={placeOfDeath}
-                  onChange={(e) => setPlaceOfDeath(e.target.value)}
+                  onChange={(e) => {
+                    setPlaceOfDeath(e.target.value);
+                    clearFieldError('placeOfDeath');
+                  }}
+                  aria-invalid={errors.placeOfDeath ? 'true' : 'false'}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                   placeholder="Contoh: RS Hasan Sadikin / Rumah Tinggal"
                 />
+                {errors.placeOfDeath && (
+                  <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{errors.placeOfDeath}</p>
+                )}
               </div>
 
               <div className="sm:col-span-2">
@@ -743,7 +720,10 @@ function ReporterPortalContent() {
                   id="kelurahan-select"
                   name="kelurahan"
                   value={kelurahan}
-                  onChange={(e) => handleAddressRoutingChange(e.target.value, rt, rw)}
+                  onChange={(e) => {
+                    handleAddressRoutingChange(e.target.value, rt, rw);
+                    clearFieldError('kelurahan');
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 >
                   <option value="Kelurahan Merdeka">Kelurahan Merdeka</option>
@@ -763,7 +743,10 @@ function ReporterPortalContent() {
                   id="rt-select"
                   name="rt"
                   value={rt}
-                  onChange={(e) => handleAddressRoutingChange(kelurahan, e.target.value, rw)}
+                  onChange={(e) => {
+                    handleAddressRoutingChange(kelurahan, e.target.value, rw);
+                    clearFieldError('rt');
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 >
                   <option value="01">RT 01</option>
@@ -785,7 +768,10 @@ function ReporterPortalContent() {
                   id="rw-select"
                   name="rw"
                   value={rw}
-                  onChange={(e) => handleAddressRoutingChange(kelurahan, rt, e.target.value)}
+                  onChange={(e) => {
+                    handleAddressRoutingChange(kelurahan, rt, e.target.value);
+                    clearFieldError('rw');
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2 text-sm text-slate-900 bg-white shadow-2xs focus-visible:outline-2 focus-visible:outline-blue-700"
                 >
                   <option value="01">RW 01</option>
@@ -828,9 +814,13 @@ function ReporterPortalContent() {
                 4
               </span>
               <h2 id="section-docs-upload" className="text-lg font-bold text-slate-900">
-                Langkah 4: Unggah Dokumen Pendukung & Asisten Optik AI
+                Langkah 4: Pilih Dokumen Pendukung
               </h2>
             </div>
+
+            <p className="mb-4 text-xs leading-relaxed text-amber-900">
+              Untuk tahap ini, database hanya menyimpan nama file yang dipilih. Isi file belum diunggah atau disimpan.
+            </p>
 
             <div className="space-y-3">
               {/* Doc 1 */}
@@ -845,12 +835,14 @@ function ReporterPortalContent() {
                 <label className="cursor-pointer text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-md text-slate-800 hover:bg-slate-100">
                   <span>Ganti</span>
                   <input
+                    id="ktp-deceased-file"
                     type="file"
+                    required={!docs.ktpDeceased}
                     className="sr-only"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
                         setDocs({ ...docs, ktpDeceased: e.target.files[0].name });
-                        triggerAiDocCheck();
+                        clearFieldError('documents');
                       }
                     }}
                   />
@@ -870,11 +862,12 @@ function ReporterPortalContent() {
                   <span>Ganti</span>
                   <input
                     type="file"
+                    required={!docs.kkDeceased}
                     className="sr-only"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
                         setDocs({ ...docs, kkDeceased: e.target.files[0].name });
-                        triggerAiDocCheck();
+                        clearFieldError('documents');
                       }
                     }}
                   />
@@ -894,11 +887,12 @@ function ReporterPortalContent() {
                   <span>Ganti</span>
                   <input
                     type="file"
+                    required={!docs.hospitalLetter}
                     className="sr-only"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
                         setDocs({ ...docs, hospitalLetter: e.target.files[0].name });
-                        triggerAiDocCheck();
+                        clearFieldError('documents');
                       }
                     }}
                   />
@@ -906,60 +900,10 @@ function ReporterPortalContent() {
               </div>
             </div>
 
-            {/* AI Verification Assessment */}
-            <div className="mt-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/70">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                  <span>🤖 Asisten Optik AI: Hasil Pemindaian Dokumen</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => triggerAiDocCheck('optimal')}
-                    disabled={aiChecking}
-                    className="text-xs font-semibold text-emerald-900 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded hover:bg-emerald-100 cursor-pointer"
-                  >
-                    {aiChecking ? 'Memindai...' : '⚡ Optimal (98.8%)'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => triggerAiDocCheck('suboptimal')}
-                    disabled={aiChecking}
-                    className="text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded hover:bg-amber-100 cursor-pointer"
-                  >
-                    {aiChecking ? 'Memindai...' : '⚠️ Uji Sub-Optimal (91.2%)'}
-                  </button>
-                </div>
-              </div>
+            {errors.documents && (
+              <p role="alert" className="mt-2 text-xs font-semibold text-red-700">{errors.documents}</p>
+            )}
 
-              {aiResult && (
-                <div className="space-y-2">
-                  <p className="text-xs text-indigo-950 bg-white p-2.5 rounded border border-indigo-100">
-                    {aiResult.notes} (OCR: {aiResult.ocrConfidence}%, Foto KTP: {aiResult.faceClarity}%)
-                  </p>
-
-                  {/* Ethical AI Verification & Fallback Notice (ACM 1.2 Avoid Harm & ACM 2.1 Quality) */}
-                  {aiResult.overallConfidence < 95 && (
-                    <div
-                      role="alert"
-                      className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1.5 shadow-2xs"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="text-amber-800 text-base font-bold shrink-0">⚠️</span>
-                        <div className="space-y-1">
-                          <strong className="block font-bold text-amber-950">
-                            Deteksi AI kurang optimal. Berkas Anda akan dialihkan secara otomatis ke Verifikasi Manual oleh Ketua RT/RW tanpa pembatalan instan.
-                          </strong>
-                          <p className="text-[11px] text-amber-900 leading-relaxed">
-                            <strong>Prinsip Etika ACM 1.2 (Avoid Harm) &amp; ACM 2.1 (Quality):</strong> WebSurkem menerapkan prinsip verifikasi manusia berlapis (human-in-the-loop). Keterbatasan pembacaan optik terhadap cap basah atau tulisan tangan medis tidak akan pernah menggugurkan atau membatalkan hak sipil warga secara sepihak. Pengurus RT/RW memiliki wewenang untuk memverifikasi dokumen secara fisik.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           </section>
 
           {/* Step 5: Deklarasi Persetujuan & Privasi Data Pemohon (ACM 1.6 & Indonesia UU PDP No. 27/2022) */}
@@ -981,28 +925,19 @@ function ReporterPortalContent() {
               </span>
             </div>
 
-            {/* Clear Data Minimization Badges */}
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-800 border border-slate-300 font-semibold">
-                <span>🔒</span>
-                <span>Data terenkripsi</span>
+                <span>🗄️</span>
+                <span>Disimpan ke database</span>
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-900 border border-emerald-300 font-semibold">
-                <span>🏛️</span>
-                <span>Hanya diakses RT/RW &amp; Dukcapil berwenang</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-900 border border-indigo-200 font-semibold">
-                <span>🛡️</span>
-                <span>Prinsip Minimasi Data</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 font-semibold">
-                <span>🚫</span>
-                <span>Bebas Komersialisasi Pihak Ketiga</span>
+                <span>📄</span>
+                <span>Isi berkas belum disimpan</span>
               </span>
             </div>
 
             <p className="text-xs text-slate-700 leading-relaxed">
-              Sesuai ketentuan Undang-Undang Republik Indonesia Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP) dan Kode Etik Komputasi ACM 2018 (Prinsip 1.6 Menghormati Privasi), data kependudukan almarhum dan pelapor hanya diproses untuk kepentingan verifikasi penerbitan akta kematian resmi dalam ekosistem SPBE.
+              Data yang Anda masukkan digunakan untuk memproses pengajuan surat kematian. Pengamanan lanjutan dan penyimpanan file asli akan dikerjakan pada tahap berikutnya.
             </p>
 
             {/* Mandatory Checkbox */}
@@ -1033,10 +968,10 @@ function ReporterPortalContent() {
                 />
                 <div className="text-xs sm:text-sm text-slate-800 leading-snug">
                   <span className="font-semibold text-slate-900">
-                    Saya menyetujui pemrosesan data kependudukan ini secara enkripsi client-side (AES-256-GCM) khusus untuk penerbitan Akta Kematian resmi SPBE. <span className="text-red-700">*</span>
+                    Saya menyetujui data formulir disimpan untuk proses pengajuan surat kematian. <span className="text-red-700">*</span>
                   </span>
                   <span className="block text-[11px] text-slate-600 mt-1">
-                    Persetujuan ini mencakup penerusan berkas terenkripsi kepada Pengurus RT/RW domisili duka dan Administrator Dinas Dukcapil.
+                    Nama file dokumen ikut dicatat; isi file belum disimpan pada tahap ini.
                   </span>
                 </div>
               </label>
@@ -1052,37 +987,36 @@ function ReporterPortalContent() {
           {/* Submit Action */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             <span className="text-xs text-slate-600">
-              🔒 Terenkripsi dengan AES-256-GCM sebelum diteruskan ke server
+              Data akan dikirim dan disimpan ke database setelah Anda mengirim formulir.
             </span>
             <Button
               type="submit"
               variant="primary"
               size="lg"
               isLoading={isSubmitting}
-              loadingText="Mengenkripsi & Mengirim..."
+              loadingText="Menyimpan pengajuan..."
               className="w-full sm:w-auto shadow-md"
             >
-              🔐 Enkripsi & Kirim Pelaporan ke RT/RW
+              Kirim Pengajuan ke RT/RW
             </Button>
           </div>
+          {submitError && (
+            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {submitError}
+            </p>
+          )}
         </form>
 
-        {/* Right: Security & Workflow Details */}
-        <aside aria-label="Informasi Keamanan Kriptografi" className="lg:col-span-4 space-y-6">
+        <aside aria-label="Informasi penyimpanan pengajuan" className="lg:col-span-4 space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <h3 className="text-sm font-bold text-slate-900 mb-2">
-              Jaminan Kriptografi Client-Side
+              Penyimpanan Data
             </h3>
             <p className="text-xs text-slate-600 mb-3 leading-relaxed">
-              Data NIK dan berkas dilindungi enkripsi militer <strong className="text-slate-900">AES-256-GCM</strong>.
+              Data formulir disimpan di database setelah pengajuan berhasil. Berkas asli belum disimpan; hanya nama file yang dicatat.
             </p>
-            <div className="bg-slate-900 text-slate-100 p-3 rounded-lg text-xs font-mono space-y-1">
-              <div className="flex justify-between text-[11px] text-slate-400 border-b border-slate-800 pb-1">
-                <span>AES-256-GCM Active</span>
-                <span className="text-emerald-400">ENCRYPTED</span>
-              </div>
-              <div className="truncate text-amber-300 text-[10px]">IV: {encryptionStatus.ivHex}</div>
-              <div className="truncate text-indigo-300 text-[10px]">Checksum: {encryptionStatus.integrityHash.slice(0, 24)}...</div>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
+              Nomor registrasi dibuat otomatis dan status awal pengajuan tersimpan sebagai antrean RT/RW.
             </div>
           </div>
 
@@ -1120,7 +1054,7 @@ function ReporterPortalContent() {
                 <span className="p-1.5 rounded-full bg-white text-emerald-700 font-bold">✓</span>
                 <div>
                   <h2 id="receipt-title" className="text-base font-bold text-white leading-tight">
-                    Laporan Berhasil Dienkripsi & Dikirimkan!
+                    Pengajuan Berhasil Disimpan
                   </h2>
                   <p className="text-xs text-emerald-100">ID: {submittedReport.id}</p>
                 </div>
@@ -1149,10 +1083,10 @@ function ReporterPortalContent() {
 
               <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
                 <Link
-                  href={`/unduh?id=${submittedReport.id}`}
+                  href="/unduh"
                   className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold shadow-xs"
                 >
-                  Pantau di Halaman Unduh →
+                  Buka Katalog Surat →
                 </Link>
                 <Button
                   type="button"

@@ -84,10 +84,10 @@ export interface UploadedDocuments {
   kkDeceasedName?: string;
   hospitalLetterName?: string;
   ktpReporterName?: string;
-  encryptionAlgorithm: 'AES-256-GCM';
-  payloadHashAes256Gcm: string;
-  ivHex: string;
-  encryptionTimestamp: string;
+  encryptionAlgorithm?: 'AES-256-GCM';
+  payloadHashAes256Gcm?: string;
+  ivHex?: string;
+  encryptionTimestamp?: string;
   aiVerification?: {
     overallConfidence: number;
     nikMatch: boolean;

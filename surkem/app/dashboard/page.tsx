@@ -7,8 +7,6 @@ import Button from '@/components/Button';
 import BadgeStatus from '@/components/BadgeStatus';
 import CardInfo from '@/components/CardInfo';
 import {
-  getStoredReports,
-  updateReportStatus,
   getOfficerSession,
   logoutOfficer,
   getStoredAuditLogs,
@@ -16,6 +14,11 @@ import {
   subscribeToUserSession,
 } from '@/lib/mockData';
 import { DeathReport, AuditLogEntry } from '@/types';
+import {
+  deleteDeathReport,
+  loadDeathReports,
+  updateDeathReport,
+} from '@/lib/report-actions';
 
 type DashboardTab = 'queue' | 'all' | 'audit';
 
@@ -31,7 +34,9 @@ export default function DashboardPage() {
     getOfficerSession,
     getServerOfficerSession
   );
-  const [reports, setReports] = useState<DeathReport[]>(() => getStoredReports());
+  const [reports, setReports] = useState<DeathReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => getStoredAuditLogs());
   const [activeTab, setActiveTab] = useState<DashboardTab>('queue');
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +49,7 @@ export default function DashboardPage() {
   // Dukcapil issuance simulation state
   const [issuingReportId, setIssuingReportId] = useState<string | null>(null);
   const [isIssuing, setIsIssuing] = useState(false);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
 
   // Whistle-blower / Security vulnerability states (ACM 2.5)
   const [isWhistleblowerOpen, setIsWhistleblowerOpen] = useState(false);
@@ -52,6 +58,20 @@ export default function DashboardPage() {
   const [vulnAnon, setVulnAnon] = useState(true);
   const [vulnDesc, setVulnDesc] = useState('');
   const [vulnSubmittedToast, setVulnSubmittedToast] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    loadDeathReports().then((result) => {
+      if (!active) return;
+      setReportsLoading(false);
+      setReportsError(result.error || null);
+      if (result.data) setReports(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   const handleWhistleblowerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,63 +211,77 @@ export default function DashboardPage() {
   };
 
   // RT/RW Ed25519 Digital Signature Handler
-  const handleSignRTRW = (report: DeathReport) => {
+  const handleSignRTRW = async (report: DeathReport) => {
     setSigningReportId(report.id);
     setIsSigning(true);
     setSignStepNotice('Memuat Kunci Privat Ed25519 RT/RW dari Enklaf Aman...');
 
-    setTimeout(() => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
       setSignStepNotice('Signing with Ed25519 Digital Signature...');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const signatureBytes = new Uint8Array(8);
+      window.crypto.getRandomValues(signatureBytes);
+      const randomSigPart = Array.from(signatureBytes, (byte) =>
+        byte.toString(16).padStart(2, '0')
+      ).join('');
+      const signatureHex = `3045022100${randomSigPart}${randomSigPart}0220${randomSigPart}${randomSigPart}`;
+      const timestamp = new Date().toLocaleString('id-ID') + ' WIB';
+      const result = await updateDeathReport(report.id, {
+        status: 'ED25519_SIGNED',
+        rtRwSignature: {
+          algorithm: 'Ed25519',
+          signerName: session.name,
+          signerRole: 'Ketua RT',
+          signatureHex,
+          publicKey: report.assignedRTRW.publicKeyEd25519,
+          timestamp,
+          verified: true,
+        },
+        notes: `Disetujui oleh ${session.name}. Diteruskan ke antrean verifikasi Dinas Dukcapil.`,
+      });
+      if (!result.data) {
+        setReportsError(result.error || 'Perubahan status gagal disimpan.');
+        return;
+      }
+      const updatedReport = result.data;
 
-      setTimeout(() => {
-        const randomSigPart = Math.random().toString(16).substring(2, 18);
-        const signatureHex = `3045022100${randomSigPart}${randomSigPart}0220${randomSigPart}${randomSigPart}`;
-        const timestamp = new Date().toLocaleString('id-ID') + ' WIB';
-
-        const updated = updateReportStatus(report.id, 'ED25519_SIGNED', {
-          rtRwSignature: {
-            algorithm: 'Ed25519',
-            signerName: session.name,
-            signerRole: 'Ketua RT',
-            signatureHex,
-            publicKey: report.assignedRTRW.publicKeyEd25519,
-            timestamp,
-            verified: true,
-          },
-          notes: `Disetujui dan ditandatangani secara digital (Ed25519) oleh ${session.name}. Otomatis diteruskan ke antrean verifikasi Dinas Dukcapil.`,
-        });
-
-        // Add Immutable Audit Trail Entry
-        addAuditLog({
-          actorRole: 'Ketua RT/RW',
-          actorName: session.name,
-          action: 'Persetujuan & Tanda Tangan Digital Draft (Ed25519)',
-          targetReportId: report.id,
-          cryptoHash: `ed25519:${signatureHex.slice(0, 36)}...`,
-          details: `Verifikasi berkas almarhum ${report.deceased.fullName} disahkan oleh ${session.name} (${session.region}). Kunci publik terverifikasi.`,
-        });
-
-        setReports(updated);
-        setAuditLogs(getStoredAuditLogs());
-        setIsSigning(false);
-        setSigningReportId(null);
-        setSignStepNotice(null);
-      }, 1000);
-    }, 600);
+      addAuditLog({
+        actorRole: 'Ketua RT/RW',
+        actorName: session.name,
+        action: 'Persetujuan Pengajuan',
+        targetReportId: report.id,
+        cryptoHash: `ed25519:${signatureHex.slice(0, 36)}...`,
+        details: `Pengajuan ${report.deceased.fullName} disetujui oleh ${session.name} (${session.region}).`,
+      });
+      setReports((current) =>
+        current.map((item) => (item.id === report.id ? updatedReport : item))
+      );
+      setAuditLogs(getStoredAuditLogs());
+      setReportsError(null);
+    } catch (error) {
+      console.error('Gagal memproses persetujuan RT/RW:', error);
+      setReportsError('Persetujuan gagal diproses.');
+    } finally {
+      setIsSigning(false);
+      setSigningReportId(null);
+      setSignStepNotice(null);
+    }
   };
 
   // Dukcapil Certificate Issuance Handler
-  const handleIssueDukcapil = (report: DeathReport) => {
+  const handleIssueDukcapil = async (report: DeathReport) => {
     setIssuingReportId(report.id);
     setIsIssuing(true);
-
-    setTimeout(() => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 900));
       const year = new Date().getFullYear();
       const randomCertSeq = Math.floor(1000 + Math.random() * 9000);
       const certNo = `3273-KM-${year}-${randomCertSeq}`;
       const now = new Date().toLocaleString('id-ID') + ' WIB';
 
-      const updated = updateReportStatus(report.id, 'CERTIFICATE_ISSUED', {
+      const result = await updateDeathReport(report.id, {
+        status: 'CERTIFICATE_ISSUED',
         dukcapilIssuance: {
           issuedAt: now,
           officerName: session.name,
@@ -260,7 +294,12 @@ export default function DashboardPage() {
         notes: `Akta Kematian resmi Nomor ${certNo} telah diterbitkan secara sah oleh Dinas Kependudukan dan Pencatatan Sipil. Siap diunduh oleh pelapor menggunakan kredensial PIN NIK.`,
       });
 
-      // Add Immutable Audit Trail Entry
+      if (!result.data) {
+        setReportsError(result.error || 'Penerbitan gagal disimpan.');
+        return;
+      }
+      const updatedReport = result.data;
+
       addAuditLog({
         actorRole: 'Petugas Dukcapil',
         actorName: `${session.name} (NIP. ${session.nipOrNik})`,
@@ -269,16 +308,72 @@ export default function DashboardPage() {
         cryptoHash: `bsre:${certNo}:pbkdf2_100k`,
         details: `Akta Kematian Nomor ${certNo} diterbitkan untuk ${report.deceased.fullName}. Dilindungi PIN dekripsi NIK ${report.deceased.nik.slice(-4)}.`,
       });
-
-      setReports(updated);
+      setReports((current) =>
+        current.map((item) => (item.id === report.id ? updatedReport : item))
+      );
       setAuditLogs(getStoredAuditLogs());
+      setReportsError(null);
+    } catch (error) {
+      console.error('Gagal memproses penerbitan Dukcapil:', error);
+      setReportsError('Penerbitan gagal diproses.');
+    } finally {
       setIsIssuing(false);
       setIssuingReportId(null);
-    }, 900);
+    }
+  };
+
+  const handleDeleteReport = async (report: DeathReport) => {
+    const confirmed = window.confirm(
+      `Hapus permanen pengajuan ${report.id} atas nama ${report.deceased.fullName}? Tindakan ini tidak dapat dibatalkan.`
+    );
+    if (!confirmed) return;
+
+    setDeletingReportId(report.id);
+    const result = await deleteDeathReport(report.id);
+    setDeletingReportId(null);
+    if (!result.data) {
+      setReportsError(result.error || 'Pengajuan gagal dihapus.');
+      return;
+    }
+
+    setReports((current) => current.filter((item) => item.id !== report.id));
+    setReportsError(null);
+    addAuditLog({
+      actorRole: 'Petugas Dukcapil',
+      actorName: session.name,
+      action: 'Penghapusan Pengajuan',
+      targetReportId: report.id,
+      cryptoHash: 'penghapusan-data',
+      details: `Pengajuan ${report.deceased.fullName} dihapus dari database.`,
+    });
+    setAuditLogs(getStoredAuditLogs());
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      {reportsError && (
+        <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <span>{reportsError}</span>
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={async () => {
+              setReportsLoading(true);
+              const result = await loadDeathReports();
+              setReportsLoading(false);
+              setReportsError(result.error || null);
+              if (result.data) setReports(result.data);
+            }}
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
+      {!reportsError && reportsLoading && (
+        <p role="status" className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          Memuat data pengajuan dari database...
+        </p>
+      )}
       {/* Officer Header with Profile & Logout */}
       <div className="mb-8 border-b border-slate-200 pb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -751,6 +846,17 @@ export default function DashboardPage() {
                               >
                                 📥 Unduh Akta
                               </Link>
+                            )}
+                            {isDukcapil && (
+                              <button
+                                type="button"
+                                disabled={deletingReportId === report.id}
+                                onClick={() => handleDeleteReport(report)}
+                                className="inline-flex items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-red-700"
+                                aria-label={`Hapus permanen pengajuan ${report.id}`}
+                              >
+                                {deletingReportId === report.id ? 'Menghapus...' : 'Hapus'}
+                              </button>
                             )}
                           </div>
                         </td>

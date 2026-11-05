@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { DeathReport } from '@/types';
 import Button from '@/components/Button';
 import BadgeStatus from '@/components/BadgeStatus';
-import { updateReportStatus, addAuditLog, getOfficerSession } from '@/lib/mockData';
+import { addAuditLog, getOfficerSession } from '@/lib/mockData';
+import { updateDeathReport } from '@/lib/report-actions';
 
 interface ApprovalActionsProps {
   report: DeathReport;
@@ -18,57 +19,64 @@ export default function ApprovalActions({ report }: ApprovalActionsProps) {
   const [isSigning, setIsSigning] = useState(false);
   const [signNotice, setSignNotice] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isAlreadySigned = !!currentSignature;
   const isCertificateIssued = currentStatus === 'CERTIFICATE_ISSUED';
 
-  const handleSignEd25519 = () => {
+  const handleSignEd25519 = async () => {
     setIsSigning(true);
+    setErrorMessage(null);
     setSignNotice('Memuat Kunci Privat Ed25519 RT/RW dari Enklaf Aman...');
 
-    setTimeout(() => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
       setSignNotice('Signing with Ed25519 Digital Signature...');
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const session = getOfficerSession();
+      const signerName = session?.name || report.assignedRTRW.officerName;
+      const randomSigPart = Math.random().toString(16).substring(2, 18);
+      const signatureHex = `3045022100${randomSigPart}${randomSigPart}0220${randomSigPart}${randomSigPart}`;
+      const timestamp = new Date().toLocaleString('id-ID') + ' WIB';
 
-      setTimeout(() => {
-        const session = getOfficerSession();
-        const signerName = session?.name || report.assignedRTRW.officerName || 'Ketua RT 03 Merdeka';
-        const randomSigPart = Math.random().toString(16).substring(2, 18);
-        const signatureHex = `3045022100${randomSigPart}${randomSigPart}0220${randomSigPart}${randomSigPart}`;
-        const timestamp = new Date().toLocaleString('id-ID') + ' WIB';
+      const newSignature: import('@/types').DigitalSignatureInfo = {
+        algorithm: 'Ed25519',
+        signerName,
+        signerRole: 'Ketua RT',
+        signatureHex,
+        publicKey: report.assignedRTRW.publicKeyEd25519,
+        timestamp,
+        verified: true,
+      };
 
-        const newSignature: import('@/types').DigitalSignatureInfo = {
-          algorithm: 'Ed25519',
-          signerName,
-          signerRole: 'Ketua RT',
-          signatureHex,
-          publicKey: report.assignedRTRW.publicKeyEd25519,
-          timestamp,
-          verified: true,
-        };
+      const result = await updateDeathReport(report.id, {
+        status: 'ED25519_SIGNED',
+        rtRwSignature: newSignature,
+        notes: `Pengajuan disetujui oleh ${signerName}.`,
+      });
+      if (!result.data) {
+        setErrorMessage(result.error || 'Perubahan status gagal disimpan.');
+        return;
+      }
 
-        // Update local storage and system state
-        updateReportStatus(report.id, 'ED25519_SIGNED', {
-          rtRwSignature: newSignature,
-          notes: `Disetujui dan ditandatangani secara digital (Ed25519) oleh ${signerName}. Otomatis diteruskan ke antrean verifikasi Dinas Dukcapil.`,
-        });
-
-        // Add Immutable Audit Trail Entry
-        addAuditLog({
-          actorRole: 'Ketua RT/RW',
-          actorName: signerName,
-          action: 'Persetujuan & Tanda Tangan Digital Draft (Ed25519)',
-          targetReportId: report.id,
-          cryptoHash: `ed25519:${signatureHex.slice(0, 36)}...`,
-          details: `Verifikasi berkas almarhum ${report.deceased.fullName} disahkan oleh ${signerName}. Kunci publik terverifikasi sah.`,
-        });
-
-        setCurrentStatus('ED25519_SIGNED');
-        setCurrentSignature(newSignature);
-        setIsSigning(false);
-        setSignNotice(null);
-        setSuccessMessage('Berkas berhasil disetujui & ditandatangani secara digital dengan kunci privat Ed25519!');
-      }, 900);
-    }, 600);
+      addAuditLog({
+        actorRole: 'Ketua RT/RW',
+        actorName: signerName,
+        action: 'Persetujuan Pengajuan',
+        targetReportId: report.id,
+        cryptoHash: `ed25519:${signatureHex.slice(0, 36)}...`,
+        details: `Pengajuan ${report.deceased.fullName} disetujui oleh ${signerName}.`,
+      });
+      setCurrentStatus(result.data.status);
+      setCurrentSignature(newSignature);
+      setSuccessMessage('Pengajuan berhasil disetujui dan statusnya tersimpan di database.');
+    } catch (error) {
+      console.error('Gagal menyimpan persetujuan pengajuan:', error);
+      setErrorMessage('Persetujuan gagal diproses.');
+    } finally {
+      setIsSigning(false);
+      setSignNotice(null);
+    }
   };
 
   return (
@@ -142,6 +150,11 @@ export default function ApprovalActions({ report }: ApprovalActionsProps) {
             <p className="leading-relaxed">{successMessage}</p>
           </div>
         </div>
+      )}
+      {errorMessage && (
+        <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
+          {errorMessage}
+        </p>
       )}
 
       {/* Signing Progress Feedback Overlay */}

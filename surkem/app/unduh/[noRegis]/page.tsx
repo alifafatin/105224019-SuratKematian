@@ -1,27 +1,18 @@
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getDaftarSurat, findSuratByNoRegis } from '@/lib/data';
+import { findSuratByNoRegis } from '@/lib/data';
 import BadgeStatus from '@/components/BadgeStatus';
 
 interface DynamicCertificatePageProps {
   params: Promise<{ noRegis: string }>;
 }
 
-// Next.js static generation optimization
-export async function generateStaticParams() {
-  const records = await getDaftarSurat();
-  return records.map((item) => ({
-    noRegis: item.noRegis,
-  }));
-}
-
 export default async function DynamicCertificatePage({ params }: DynamicCertificatePageProps) {
   // Next.js 16 (React 19) requires awaiting dynamic route params
   const { noRegis } = await params;
 
-  // Strict Regex validation: pattern ^SRK-\d{8}-[A-Z0-9]{4}$ (e.g. SRK-20261016-A1B2)
-  const REGEX_REGIS_ID = /^SRK-\d{8}-[A-Z0-9]{4}$/;
+  const REGEX_REGIS_ID = /^SRK-\d{8}-[A-F0-9]{6}$/;
   if (!noRegis || !REGEX_REGIS_ID.test(noRegis)) {
     notFound();
   }
@@ -30,13 +21,6 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
   if (!surat) {
     notFound();
   }
-
-  const sha256Hash = surat.hashSHA256;
-  const isEd25519Signed = surat.tandaTanganEd25519.status === 'TERVERIFIKASI';
-  const ed25519Signer = surat.tandaTanganEd25519.namaPenandatangan;
-  const ed25519Timestamp = surat.tandaTanganEd25519.waktuTtd;
-  const ed25519PublicKey = surat.tandaTanganEd25519.publicKey;
-  const ed25519SigHex = surat.tandaTanganEd25519.signatureHex;
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -86,68 +70,19 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
         </div>
       </div>
 
-      {/* Cryptographic Verification Badge (SHA-256 Hash & Ed25519 Digital Signature) */}
       <section
-        aria-labelledby="crypto-badge-title"
-        className="bg-slate-900 text-white rounded-2xl p-5 sm:p-6 border border-slate-800 shadow-xl space-y-4"
+        aria-labelledby="record-status-title"
+        className="rounded-2xl border border-amber-300 bg-amber-50 p-5 sm:p-6 text-amber-950"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 w-3 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-            <h2 id="crypto-badge-title" className="text-sm font-bold tracking-wider uppercase text-emerald-400">
-              Badge Verifikasi Kriptografi Terpadu (SPBE &amp; ACM 2.5)
-            </h2>
-          </div>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 w-fit">
-            ✓ Integritas Berkas Sah 100%
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* SHA-256 Payload Hash */}
-          <div className="bg-slate-800/80 rounded-xl p-3.5 border border-slate-700/80 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                <span>🔐</span>
-                <span>Integritas Payload (SHA-256):</span>
-              </span>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold">MATCHED</span>
-            </div>
-            <div className="font-mono text-[11px] text-slate-200 break-all bg-slate-950 p-2 rounded border border-slate-800">
-              {sha256Hash}
-            </div>
-            <span className="text-[10px] text-slate-400 block">
-              Enkripsi Client-Side: AES-256-GCM (Anti-Tampering &amp; Data Minimization)
-            </span>
-          </div>
-
-          {/* Ed25519 Officer Signature Verification */}
-          <div className="bg-slate-800/80 rounded-xl p-3.5 border border-slate-700/80 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                <span>🖋️</span>
-                <span>Tanda Tangan Digital RT/RW (Ed25519):</span>
-              </span>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold">
-                {isEd25519Signed ? 'VERIFIED' : 'PENDING'}
-              </span>
-            </div>
-            <div className="font-mono text-[11px] text-emerald-300 break-all bg-slate-950 p-2 rounded border border-slate-800">
-              {ed25519SigHex.slice(0, 48)}...
-            </div>
-            <div className="text-[10px] text-slate-300 flex flex-col gap-0.5">
-              <span>
-                Penandatangan: <strong className="text-white">{ed25519Signer}</strong> ({surat.tandaTanganEd25519.jabatan})
-              </span>
-              <span className="text-slate-400 font-mono">
-                Waktu TTD: {ed25519Timestamp} • Kunci: {ed25519PublicKey.slice(0, 24)}...
-              </span>
-            </div>
-          </div>
-        </div>
+        <h2 id="record-status-title" className="text-sm font-bold">
+          Status Data Database
+        </h2>
+        <p className="mt-2 text-xs leading-relaxed">
+          Data pengajuan dan status tersimpan di database. Tanda tangan digital, hash, serta validasi QR belum diaktifkan pada tahap ini.
+        </p>
       </section>
 
-      {/* Official Certificate Card Preview */}
+      {/* Certificate data preview */}
       <section
         aria-labelledby="cert-card-title"
         className="bg-white rounded-2xl border-2 border-slate-300 p-6 sm:p-10 shadow-lg space-y-6 print:border-none print:shadow-none"
@@ -161,10 +96,10 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
             Republik Indonesia
           </h2>
           <h3 className="text-sm sm:text-base font-extrabold text-slate-800 tracking-wide uppercase">
-            Kutipan Akta Kematian
+            Pratinjau Data Akta Kematian
           </h3>
           <p className="text-xs text-slate-600 font-mono">
-            Nomor: {surat.penerbitanDukcapil?.nomorAkta || '3273-KM-2026-0891'}
+            Nomor: {surat.penerbitanDukcapil?.nomorAkta || 'Belum tersedia'}
           </p>
           <p className="text-[11px] text-slate-500">
             Dinas Kependudukan dan Pencatatan Sipil {surat.kota}
@@ -215,42 +150,21 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
               </div>
               <div>
                 <span>Status Akta: </span>
-                <strong className="text-emerald-800 font-semibold">Telah Disahkan &amp; Diterbitkan Sah</strong>
+                <strong className="text-amber-800 font-semibold">Pratinjau data database</strong>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Certificate Signatures & QR Seal */}
+        {/* Issuance metadata */}
         <div className="pt-6 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-6 items-end">
-          {/* QR Verification Seal */}
           <div className="flex items-center gap-4">
-            <div className="h-24 w-24 rounded-xl border-2 border-slate-800 p-1 flex items-center justify-center bg-white shadow-2xs">
-              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-900 text-white rounded">
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-                <span className="h-4 w-4 bg-white" />
-                <span className="h-4 w-4 bg-slate-900" />
-              </div>
+            <div className="h-24 w-24 rounded-xl border border-dashed border-slate-400 flex items-center justify-center bg-slate-50 text-center text-xs text-slate-500">
+              QR belum tersedia
             </div>
             <div className="space-y-1 text-xs text-slate-600">
-              <strong className="block text-slate-900 font-bold">BSrE Balai Sertifikasi Elektronik</strong>
-              <span className="text-[11px] block">Pindai QR untuk validasi keaslian dokumen akta online.</span>
-              <span className="text-[10px] font-mono text-blue-700 block truncate max-w-xs">
-                {surat.penerbitanDukcapil?.urlValidasiQR || 'https://dukcapil.bandung.go.id/validasi/surkem'}
-              </span>
+              <strong className="block text-slate-900 font-bold">Validasi elektronik belum aktif</strong>
+              <span className="text-[11px] block">Tanda tangan dan QR resmi akan disiapkan pada tahap berikutnya.</span>
             </div>
           </div>
 
@@ -262,10 +176,10 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
               Kepala Dinas Kependudukan &amp; Pencatatan Sipil
             </div>
             <div className="font-bold text-slate-900 underline text-sm">
-              {surat.penerbitanDukcapil?.namaPejabat || 'H. Dedi Hermawan, M.Si'}
+              {surat.penerbitanDukcapil?.namaPejabat || 'Belum tersedia'}
             </div>
             <span className="text-[11px] font-mono text-slate-600 block">
-              NIP. {surat.penerbitanDukcapil?.nipPejabat || '19740512 199903 1 002'}
+              NIP. {surat.penerbitanDukcapil?.nipPejabat || 'Belum tersedia'}
             </span>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const deathReportFormSchema = z
   .object({
     reporterName: z.string().trim().min(1, 'Nama lengkap pelapor wajib diisi.'),
+    relation: z.string().trim().min(1, 'Hubungan keluarga wajib dipilih.'),
     deceasedName: z
       .string()
       .trim()
@@ -22,6 +23,20 @@ export const deathReportFormSchema = z
     dateOfDeath: z.string().min(1, 'Tanggal kematian wajib dipilih.'),
     causeOfDeath: z.string().trim().min(1, 'Penyebab kematian wajib diisi.'),
     address: z.string().trim().min(1, 'Alamat duka wajib diisi.'),
+    dateOfBirth: z.string(),
+    gender: z.enum(['Laki-laki', 'Perempuan']),
+    timeOfDeath: z.string().trim().min(1, 'Waktu kematian wajib diisi.'),
+    placeOfDeath: z.string().trim().min(1, 'Tempat kematian wajib diisi.'),
+    rt: z.string().trim().min(1, 'RT wajib diisi.'),
+    rw: z.string().trim().min(1, 'RW wajib diisi.'),
+    kelurahan: z.string().trim().min(1, 'Kelurahan wajib diisi.'),
+    kecamatan: z.string().trim().min(1, 'Kecamatan wajib diisi.'),
+    city: z.string().trim().min(1, 'Kota wajib diisi.'),
+    documentNames: z.object({
+      ktpDeceasedName: z.string().trim().min(1, 'Berkas KTP almarhum wajib dipilih.'),
+      kkDeceasedName: z.string().trim().min(1, 'Berkas Kartu Keluarga wajib dipilih.'),
+      hospitalLetterName: z.string().trim().min(1, 'Surat kematian medis wajib dipilih.'),
+    }),
     consent: z
       .boolean()
       .refine(

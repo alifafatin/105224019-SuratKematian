@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  nama      String
+  createdAt DateTime @default(now())
+}
+
+model WargaProfile {
+  id           Int           @id @default(autoincrement())
+  nama         String
+  phone        String        @unique
+  consentAt    DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deathReports DeathReport[]
+}
+
+model DeathReport {
+  id                 String   @id @default(cuid())
+  registrationNumber String   @unique
+  status             String   @default("AWAITING_RTRW_APPROVAL")
+  submittedAt        DateTime @default(now())
+  consentAt          DateTime @default(now())
+  reporterName       String
+  reporterNik        String?
+  reporterContact    String
+  reporterProfileId  Int?
+  reporterProfile    WargaProfile? @relation(fields: [reporterProfileId], references: [id], onDelete: SetNull)
+  authMethod         String
+  relation           String
+  deceasedName       String
+  deceasedNik        String
+  gender             String
+  dateOfBirth        String?
+  dateOfDeath        String
+  timeOfDeath        String
+  placeOfDeath       String
+  causeOfDeath       String
+  address            String
+  rt                 String
+  rw                 String
+  kelurahan          String
+  kecamatan          String
+  city               String
+  assignedRTRW       Json
+  documentNames      Json
+  rtRwSignature      Json?
+  dukcapilIssuance   Json?
+  notes              String?
+
+  @@index([submittedAt])
+  @@index([status])
+  @@index([reporterProfileId])
+}

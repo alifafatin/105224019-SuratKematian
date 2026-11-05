@@ -1,20 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getReportById, getAllDashboardReports } from '@/lib/data';
+import { getReportById } from '@/lib/data';
 import BadgeStatus from '@/components/BadgeStatus';
 import ApprovalActions from './ApprovalActions';
 
 interface DashboardDetailPageProps {
   params: Promise<{ id: string }>;
-}
-
-// Next.js static generation optimization for known dashboard report IDs
-export async function generateStaticParams() {
-  const reports = await getAllDashboardReports();
-  return reports.map((report) => ({
-    id: report.id,
-  }));
 }
 
 export default async function DashboardDetailPage({ params }: DashboardDetailPageProps) {
@@ -65,7 +57,7 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
             </span>
             <span className="text-xs text-slate-600">Diajukan: {report.submittedAt}</span>
             <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200">
-              AES-256-GCM Terverifikasi
+              Tersimpan di database
             </span>
           </div>
 
@@ -74,7 +66,7 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
           </h1>
 
           <p className="mt-1 text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
-            Pemeriksaan kelengkapan berkas kematian warga untuk pengesahan tanda tangan digital Ed25519 dan penerbitan Akta Kematian resmi SPBE.
+            Rincian pengajuan kematian yang tersimpan di database untuk ditinjau petugas.
           </p>
         </div>
 
@@ -83,7 +75,7 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
         </div>
       </header>
 
-      {/* Ed25519 Approval Action Card */}
+      {/* Approval action card */}
       <section aria-labelledby="section-actions-heading" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
         <h2 id="section-actions-heading" className="sr-only">
           Aksi Otorisasi dan Persetujuan Berkas
@@ -181,8 +173,8 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
 
               <div>
                 <dt className="text-slate-600">Status Verifikasi Kontak:</dt>
-                <dd className="text-emerald-800 font-semibold mt-0.5 flex items-center gap-1">
-                  <span>✓ Terverifikasi OTP/Link</span>
+                <dd className="text-slate-700 font-semibold mt-0.5 flex items-center gap-1">
+                  <span>{report.reporter.isVerified ? 'Terverifikasi' : 'Belum diverifikasi'}</span>
                 </dd>
               </div>
             </dl>
@@ -220,21 +212,21 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
         </div>
       </section>
 
-      {/* Document Attachments & AES-256-GCM Cryptographic Integrity */}
+      {/* Submitted document names */}
       <section aria-labelledby="section-docs-heading" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 id="section-docs-heading" className="text-base font-bold text-slate-900 flex items-center gap-2">
               <span aria-hidden="true">📁</span>
-              <span>Dokumen Persyaratan &amp; Integritas Kriptografi</span>
+              <span>Nama Dokumen Persyaratan</span>
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
-              Berkas digital dienkripsi client-side menggunakan AES-256-GCM sesuai Undang-Undang Perlindungan Data Pribadi (UU PDP No. 27/2022).
+              Database mencatat nama file yang dipilih. Isi file belum tersimpan.
             </p>
           </div>
 
-          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 text-emerald-400 self-start sm:self-center">
-            SHA-256 SEAL VALID
+          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200 self-start sm:self-center">
+            Nama file saja
           </span>
         </div>
 
@@ -242,59 +234,36 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="text-slate-500 block text-[11px]">KTP Almarhum:</span>
-            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.ktpDeceasedName}>
-              📄 {report.documents.ktpDeceasedName}
+            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.ktpDeceasedName || 'Belum tersedia'}>
+              📄 {report.documents.ktpDeceasedName || 'Belum tersedia'}
             </strong>
-            <span className="text-[10px] text-emerald-700 font-semibold block mt-1">✓ Berkas Lengkap</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="text-slate-500 block text-[11px]">Kartu Keluarga (KK):</span>
-            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.kkDeceasedName}>
-              📄 {report.documents.kkDeceasedName}
+            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.kkDeceasedName || 'Belum tersedia'}>
+              📄 {report.documents.kkDeceasedName || 'Belum tersedia'}
             </strong>
-            <span className="text-[10px] text-emerald-700 font-semibold block mt-1">✓ Berkas Lengkap</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="text-slate-500 block text-[11px]">Surat Medis / Kematian:</span>
-            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.hospitalLetterName}>
-              📄 {report.documents.hospitalLetterName}
+            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.hospitalLetterName || 'Belum tersedia'}>
+              📄 {report.documents.hospitalLetterName || 'Belum tersedia'}
             </strong>
-            <span className="text-[10px] text-emerald-700 font-semibold block mt-1">✓ Berkas Lengkap</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="text-slate-500 block text-[11px]">KTP Pelapor:</span>
-            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.ktpReporterName}>
-              📄 {report.documents.ktpReporterName}
+            <strong className="text-slate-900 font-mono block mt-1 truncate" title={report.documents.ktpReporterName || 'Belum tersedia'}>
+              📄 {report.documents.ktpReporterName || 'Belum tersedia'}
             </strong>
-            <span className="text-[10px] text-emerald-700 font-semibold block mt-1">✓ Berkas Lengkap</span>
           </div>
         </div>
 
-        {/* Cryptographic Hash & Envelope Information */}
-        <div className="bg-slate-900 text-slate-100 rounded-xl p-4 font-mono text-xs space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800 pb-2">
-            <span>Standar Kriptografi SPBE: AES-256-GCM</span>
-            <span className="text-emerald-400 font-bold">TERENKRIPSI</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-            <div>
-              <span className="text-slate-400 block">Initialization Vector (IV Hex):</span>
-              <span className="text-amber-300 break-all">{report.documents.ivHex}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block">Timestamp Enkripsi:</span>
-              <span className="text-slate-300">{report.documents.encryptionTimestamp}</span>
-            </div>
-            <div className="md:col-span-2">
-              <span className="text-slate-400 block">Payload SHA-256 Checksum:</span>
-              <span className="text-emerald-400 break-all">{report.documents.payloadHashAes256Gcm}</span>
-            </div>
-          </div>
-        </div>
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+          Pengamanan dan penyimpanan isi dokumen akan ditambahkan pada tahap berikutnya.
+        </p>
       </section>
 
       {/* Footer Navigation Bar */}
@@ -313,4 +282,3 @@ export default async function DashboardDetailPage({ params }: DashboardDetailPag
     </div>
   );
 }
-
