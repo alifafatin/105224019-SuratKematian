@@ -1,4 +1,6 @@
 node_modules
+.next/
+*.tsbuildinfo
 # Keep secrets out of version control while allowing safe templates.
 .env*
 !.env.example

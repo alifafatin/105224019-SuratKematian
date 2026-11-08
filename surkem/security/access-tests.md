@@ -88,8 +88,10 @@ pengujian otorisasi runtime.
 
 ## Batas pengumpulan saat ini
 
-- Belum ada Dockerfile/Compose pada workspace ini; pengguna non-root,
-  capability, pemetaan port, scan image, dan SBOM belum dapat dibuktikan.
+- Dockerfile dan Compose yang menerapkan pengguna non-root, pembuangan
+  capability, filesystem read-only, serta port internal sudah disiapkan.
+  Belum diverifikasi pada runtime Docker; hasil scan image dan SBOM juga belum
+  dibuat. Lihat [`container-hardening.md`](./container-hardening.md).
 - Lynis dan konfigurasi SSH perlu diuji pada Linux VM yang dikuasai sendiri.
 - Tugas 1 tidak ada di workspace; ID risiko untuk tiap kontrol perlu dipetakan
   dari dokumen Tugas 1.
