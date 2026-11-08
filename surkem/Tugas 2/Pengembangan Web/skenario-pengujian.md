@@ -36,7 +36,7 @@ Data Warga
 
 Tiga skenario berikut menjadi bukti penolakan input tidak valid. Untuk setiap
 skenario, pastikan pesan kesalahan terlihat pada field terkait dan data invalid
-tidak tersimpan.
+tidak tersimpan.xxxxxxxxxxxxxxxxxxxxxxx
 
 | ID | Field yang diuji | Langkah pengujian | Hasil yang diharapkan | Hasil aktual | Status |
 |---|---|---|---|---|---|
