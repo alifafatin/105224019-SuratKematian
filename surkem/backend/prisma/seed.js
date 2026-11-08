@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('@prisma/client');
+const { encryptSensitiveValue } = require('../src/security/sensitive-data');
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -26,17 +27,19 @@ async function main() {
     where: { registrationNumber: 'SRK-SEED-2026-001' },
     update: {
       reporterProfileId: profile.id,
+      reporterNik: encryptSensitiveValue('3201010101010001', 'DeathReport.reporterNik'),
+      deceasedNik: encryptSensitiveValue('3201010101010002', 'DeathReport.deceasedNik'),
     },
     create: {
       registrationNumber: 'SRK-SEED-2026-001',
       reporterName: 'Warga Contoh',
-      reporterNik: '3201010101010001',
+      reporterNik: encryptSensitiveValue('3201010101010001', 'DeathReport.reporterNik'),
       reporterContact: profile.phone,
       reporterProfileId: profile.id,
       authMethod: 'whatsapp',
       relation: 'Anak',
       deceasedName: 'Almarhum Contoh',
-      deceasedNik: '3201010101010002',
+      deceasedNik: encryptSensitiveValue('3201010101010002', 'DeathReport.deceasedNik'),
       gender: 'Laki-laki',
       dateOfBirth: '1950-01-01',
       dateOfDeath: '2026-01-01',

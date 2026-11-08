@@ -4,11 +4,25 @@ import { z } from 'zod';
 
 export type WargaProfileState = {
   error?: string;
+  fieldErrors?: Partial<Record<'name' | 'phone' | 'consent', string>>;
   profile?: {
     nama: string;
     phone: string;
   };
 };
+
+const createProfileSchema = z.object({
+  name: z.string().trim().min(3, 'Nama minimal 3 karakter.').max(120, 'Nama maksimal 120 karakter.'),
+  phone: z
+    .string()
+    .transform((value) => value.replace(/\D/g, ''))
+    .refine((value) => value.length >= 8 && value.length <= 15, {
+      message: 'Nomor telepon harus terdiri dari 8–15 digit.',
+    }),
+  consent: z.boolean().refine((value) => value, {
+    message: 'Persetujuan penyimpanan wajib diberikan.',
+  }),
+});
 
 const profileResponseSchema = z.object({
   profile: z.object({
@@ -21,23 +35,31 @@ export async function saveWargaProfile(
   _previousState: WargaProfileState,
   formData: FormData
 ): Promise<WargaProfileState> {
-  const nama = formData.get('name');
-  const phone = formData.get('phone');
-  const consent = formData.get('consent') === 'on';
-  const backendUrl = process.env.BACKEND_API_URL;
-
-  if (
-    typeof nama !== 'string' ||
-    typeof phone !== 'string' ||
-    !consent ||
-    !backendUrl
-  ) {
+  const input = createProfileSchema.safeParse({
+    name: formData.get('name'),
+    phone: formData.get('phone'),
+    consent: formData.get('consent') === 'on',
+  });
+  if (!input.success) {
+    const fieldErrors: WargaProfileState['fieldErrors'] = {};
+    for (const issue of input.error.issues) {
+      const field = issue.path[0];
+      if (
+        (field === 'name' || field === 'phone' || field === 'consent') &&
+        !fieldErrors[field]
+      ) {
+        fieldErrors[field] = issue.message;
+      }
+    }
     return {
-      error: !backendUrl
-        ? 'Layanan penyimpanan belum dikonfigurasi.'
-        : 'Lengkapi nama, nomor telepon, dan persetujuan penyimpanan.',
+      error: 'Periksa kembali data pada field yang ditandai.',
+      fieldErrors,
     };
   }
+
+  const backendUrl = process.env.BACKEND_API_URL;
+
+  if (!backendUrl) return { error: 'Layanan penyimpanan belum dikonfigurasi.' };
 
   let response: Response;
   try {
@@ -46,7 +68,11 @@ export async function saveWargaProfile(
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nama, phone, consent }),
+        body: JSON.stringify({
+          nama: input.data.name,
+          phone: input.data.phone,
+          consent: input.data.consent,
+        }),
         cache: 'no-store',
         signal: AbortSignal.timeout(10_000),
       }
@@ -57,7 +83,9 @@ export async function saveWargaProfile(
   }
 
   if (response.status === 400) {
-    return { error: 'Masukkan nama dan nomor telepon yang valid.' };
+    return {
+      error: 'Periksa kembali nama, nomor telepon, dan persetujuan penyimpanan.',
+    };
   }
   if (response.status === 429) {
     return { error: 'Terlalu banyak percobaan. Coba lagi beberapa saat.' };

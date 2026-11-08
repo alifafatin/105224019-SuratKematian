@@ -11,7 +11,7 @@ const profileLimiter = rateLimit({
   legacyHeaders: false,
 });
 const profileSchema = z.object({
-  nama: z.string().trim().min(1).max(120),
+  nama: z.string().trim().min(3, 'Nama minimal 3 karakter.').max(120),
   phone: z
     .string()
     .transform((phone) => phone.replace(/\D/g, ''))
@@ -19,7 +19,7 @@ const profileSchema = z.object({
   consent: z.literal(true),
 });
 const updateProfileSchema = z.object({
-  nama: z.string().trim().min(1).max(120),
+  nama: z.string().trim().min(3, 'Nama minimal 3 karakter.').max(120),
   consent: z.literal(true),
 });
 const deleteProfileSchema = z.object({

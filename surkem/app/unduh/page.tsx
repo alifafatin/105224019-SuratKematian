@@ -30,15 +30,16 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-950 border border-blue-300">
-              Katalog Data Kependudukan Sah
+              Daftar Status Pengajuan
             </span>
-            <span className="text-xs text-slate-600">Total Terdaftar: {allRecords.length} Dokumen</span>
+            <span className="text-xs text-slate-600">Total Pengajuan: {allRecords.length}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-            Katalog Akta Kematian Digital Resmi
+            Status Pengajuan Surat Kematian
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
-            Daftar permohonan surat kematian warga terdaftar. Klik judul atau tombol pada kartu untuk membuka <strong className="text-slate-900">Halaman Detail Akta Standalone</strong> secara langsung.
+            Semua pengajuan tersimpan ditampilkan beserta status persetujuan RT/RW dan
+            proses Dukcapil. Akta hanya dapat diunduh setelah diterbitkan Dukcapil.
           </p>
         </div>
 
@@ -69,7 +70,7 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
               name="q"
               type="search"
               defaultValue={searchQuery}
-              placeholder="Cari Nomor Registrasi (SRK-2026...), Nama Almarhum, atau 16 Digit NIK..."
+              placeholder="Cari nomor registrasi, nama almarhum, atau NIK..."
               className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 bg-white placeholder:text-slate-500 focus-visible:outline-2 focus-visible:outline-blue-700 font-mono shadow-2xs"
             />
           </div>
@@ -94,7 +95,7 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
       <section aria-labelledby="catalog-records-title" className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 id="catalog-records-title" className="text-base font-bold text-slate-900">
-            Daftar Berkas Terdaftar ({filteredRecords.length})
+            Daftar Pengajuan ({filteredRecords.length})
           </h2>
           <span className="text-xs text-slate-500 font-mono">
             Rute Detail: /unduh/[noRegis]
@@ -104,15 +105,19 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
         {filteredRecords.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
             <div className="text-3xl" aria-hidden="true">🔍</div>
-            <h3 className="text-base font-bold text-slate-900">Berkas Tidak Ditemukan</h3>
+            <h3 className="text-base font-bold text-slate-900">
+              {searchQuery ? 'Pengajuan Tidak Ditemukan' : 'Belum Ada Pengajuan'}
+            </h3>
             <p className="text-xs text-slate-600 max-w-sm mx-auto">
-              Tidak ada permohonan yang sesuai dengan kata kunci &quot;{searchQuery}&quot;. Silakan periksa kembali nomor registrasi atau nama yang Anda masukkan.
+              {searchQuery
+                ? `Tidak ada pengajuan yang sesuai dengan kata kunci "${searchQuery}". Periksa kembali nomor registrasi atau nama.`
+                : 'Pengajuan yang dikirim akan muncul di sini beserta status persetujuan RT/RW dan proses Dukcapil.'}
             </p>
             <Link
               href="/unduh"
               className="inline-block mt-2 text-xs font-semibold text-blue-700 hover:underline"
             >
-              Tampilkan Semua Katalog Berkas →
+              Tampilkan Semua Pengajuan →
             </Link>
           </div>
         ) : (
@@ -124,12 +129,26 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
               >
                 <div className="space-y-3">
                   {/* Card Header: Reg ID & Status */}
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="flex flex-col gap-2 border-b border-slate-100 pb-3">
                     <span className="font-mono text-xs font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {item.noRegis}
                     </span>
                     <BadgeStatus status={item.statusVerifikasi} size="sm" />
                   </div>
+                  <p
+                    className={`text-xs font-semibold ${
+                      item.statusVerifikasi === 'DRAFT_ENCRYPTED' ||
+                      item.statusVerifikasi === 'AWAITING_RTRW_APPROVAL'
+                        ? 'text-amber-800'
+                        : 'text-emerald-800'
+                    }`}
+                  >
+                    Persetujuan RT/RW:{' '}
+                    {item.statusVerifikasi === 'DRAFT_ENCRYPTED' ||
+                    item.statusVerifikasi === 'AWAITING_RTRW_APPROVAL'
+                      ? 'Belum disetujui'
+                      : 'Disetujui'}
+                  </p>
 
                   {/* Title MUST be wrapped in Link navigating directly to dynamic route */}
                   <div>
@@ -137,7 +156,7 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
                       <Link
                         href={`/unduh/${item.noRegis}`}
                         className="hover:underline focus-visible:outline-2 focus-visible:outline-blue-700 rounded"
-                        aria-label={`Buka detail akta kematian atas nama ${item.namaAlmarhum}`}
+                        aria-label={`Lihat status pengajuan atas nama ${item.namaAlmarhum}`}
                       >
                         {item.namaAlmarhum}
                       </Link>
@@ -182,7 +201,7 @@ async function UnduhCatalogContent({ searchParams }: CatalogPageProps) {
                     href={`/unduh/${item.noRegis}`}
                     className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs shadow-xs focus-visible:outline-2 focus-visible:outline-blue-700 transition-colors"
                   >
-                    <span>Buka Halaman Detail Akta</span>
+                    <span>Lihat Status Pengajuan</span>
                     <span>→</span>
                   </Link>
                 </div>

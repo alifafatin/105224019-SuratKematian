@@ -2,6 +2,10 @@ const { Router } = require('express');
 const { randomUUID } = require('node:crypto');
 const { z } = require('zod');
 const prisma = require('../config/prisma');
+const {
+  decryptSensitiveValue,
+  encryptSensitiveValue,
+} = require('../security/sensitive-data');
 
 const router = Router();
 const reportStatuses = [
@@ -101,7 +105,9 @@ function toReport(row) {
     id: row.registrationNumber,
     reporter: {
       name: row.reporterName,
-      nik: row.reporterNik || '',
+      nik: row.reporterNik
+        ? decryptSensitiveValue(row.reporterNik, 'DeathReport.reporterNik')
+        : '',
       email: isEmail ? row.reporterContact : '',
       phone: isEmail ? '' : row.reporterContact,
       relation: row.relation,
@@ -110,7 +116,7 @@ function toReport(row) {
     },
     deceased: {
       fullName: row.deceasedName,
-      nik: row.deceasedNik,
+      nik: decryptSensitiveValue(row.deceasedNik, 'DeathReport.deceasedNik'),
       gender: row.gender,
       dateOfBirth: row.dateOfBirth || '',
       dateOfDeath: row.dateOfDeath,
@@ -174,7 +180,10 @@ router.post('/', async (req, res) => {
         id,
         registrationNumber,
         ...reportData,
-        reporterNik: input.data.reporterNik || null,
+        reporterNik: input.data.reporterNik
+          ? encryptSensitiveValue(input.data.reporterNik, 'DeathReport.reporterNik')
+          : null,
+        deceasedNik: encryptSensitiveValue(input.data.deceasedNik, 'DeathReport.deceasedNik'),
         dateOfBirth: input.data.dateOfBirth || null,
         reporterProfileId: reporterProfile?.id,
       },

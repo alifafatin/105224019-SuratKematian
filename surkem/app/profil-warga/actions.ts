@@ -5,6 +5,7 @@ import { z } from 'zod';
 export type ProfileActionResult<T> = {
   data?: T;
   error?: string;
+  fieldErrors?: Partial<Record<'nama', string>>;
 };
 
 export type WargaProfileData = {
@@ -86,9 +87,15 @@ export async function updateWargaProfile(
   nama: string
 ): Promise<ProfileActionResult<WargaProfileData>> {
   const input = z.object({
-    nama: z.string().trim().min(1, 'Nama wajib diisi.').max(120, 'Nama maksimal 120 karakter.'),
+    nama: z.string().trim().min(3, 'Nama minimal 3 karakter.').max(120, 'Nama maksimal 120 karakter.'),
   }).safeParse({ nama });
-  if (!input.success) return { error: input.error.issues[0]?.message };
+  if (!input.success) {
+    const message = input.error.issues[0]?.message || 'Nama wajib diisi.';
+    return {
+      error: 'Periksa kembali data pada field yang ditandai.',
+      fieldErrors: { nama: message },
+    };
+  }
 
   return requestProfile(phone, {
     method: 'PATCH',

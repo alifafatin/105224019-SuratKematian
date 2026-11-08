@@ -60,7 +60,6 @@ export async function getReportByRegistrationId(
 export async function getDaftarSurat(): Promise<SuratKematianItem[]> {
   const reports = await fetchReports();
   return reports
-    .filter((report) => report.status === 'CERTIFICATE_ISSUED')
     .map((report) => ({
       noRegis: report.id,
       namaAlmarhum: report.deceased.fullName,

@@ -7,7 +7,9 @@
     "dev": "node --watch server.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:encrypt-existing": "node scripts/encrypt-existing-report-niks.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

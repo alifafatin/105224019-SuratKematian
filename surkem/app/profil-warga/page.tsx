@@ -18,6 +18,7 @@ export default function WargaProfilePage() {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,11 +49,13 @@ export default function WargaProfilePage() {
     if (!profile) return;
     setPending(true);
     setError(null);
+    setNameError(null);
     setNotice(null);
     const result = await updateWargaProfile(profile.phone, name);
     setPending(false);
     if (!result.data) {
       setError(result.error || 'Profil warga gagal diperbarui.');
+      setNameError(result.fieldErrors?.nama || null);
       return;
     }
     setProfile(result.data);
@@ -121,12 +124,21 @@ export default function WargaProfilePage() {
               <input
                 id="profile-name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameError(null);
+                }}
                 required
                 maxLength={120}
-                aria-invalid={Boolean(error) && !name.trim()}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? 'profile-name-error' : undefined}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-950 focus-visible:outline-2 focus-visible:outline-blue-700"
               />
+              {nameError && (
+                <p id="profile-name-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                  {nameError}
+                </p>
+              )}
             </div>
             {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
             {notice && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}

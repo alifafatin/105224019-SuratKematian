@@ -62,9 +62,16 @@ export default function WargaLoginPage() {
               autoComplete="name"
               required
               maxLength={120}
+              aria-invalid={Boolean(state.fieldErrors?.name)}
+              aria-describedby={state.fieldErrors?.name ? 'warga-name-error' : undefined}
               className="w-full rounded-lg border border-slate-300 px-3.5 py-3 text-sm text-slate-950 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
               placeholder="Masukkan nama lengkap"
             />
+            {state.fieldErrors?.name && (
+              <p id="warga-name-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                {state.fieldErrors.name}
+              </p>
+            )}
           </div>
 
           <div>
@@ -80,23 +87,39 @@ export default function WargaLoginPage() {
               required
               pattern="[\d\s()+-]{8,24}"
               title="Masukkan nomor telepon yang valid."
+              aria-invalid={Boolean(state.fieldErrors?.phone)}
+              aria-describedby={state.fieldErrors?.phone ? 'warga-phone-error' : undefined}
               className="w-full rounded-lg border border-slate-300 px-3.5 py-3 text-sm text-slate-950 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
               placeholder="Contoh: 081223344556"
             />
+            {state.fieldErrors?.phone && (
+              <p id="warga-phone-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                {state.fieldErrors.phone}
+              </p>
+            )}
           </div>
 
-          <label className="flex items-start gap-2 text-sm leading-relaxed text-slate-700">
-            <input
-              name="consent"
-              type="checkbox"
-              required
-              className="mt-1 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-            />
-            <span>
-              Saya setuju nama dan nomor telepon disimpan sebagai profil demo. Nomor HP
-              belum diverifikasi dan tidak membuktikan identitas saya.
-            </span>
-          </label>
+          <div>
+            <label className="flex items-start gap-2 text-sm leading-relaxed text-slate-700">
+              <input
+                name="consent"
+                type="checkbox"
+                required
+                aria-invalid={Boolean(state.fieldErrors?.consent)}
+                aria-describedby={state.fieldErrors?.consent ? 'warga-consent-error' : undefined}
+                className="mt-1 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+              />
+              <span>
+                Saya setuju nama dan nomor telepon disimpan sebagai profil demo. Nomor HP
+                belum diverifikasi dan tidak membuktikan identitas saya.
+              </span>
+            </label>
+            {state.fieldErrors?.consent && (
+              <p id="warga-consent-error" role="alert" className="mt-1 text-xs font-semibold text-red-700">
+                {state.fieldErrors.consent}
+              </p>
+            )}
+          </div>
 
           {state.error && (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">

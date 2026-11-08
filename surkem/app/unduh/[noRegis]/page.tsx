@@ -21,6 +21,11 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
   if (!surat) {
     notFound();
   }
+  const certificateIssued = surat.statusVerifikasi === 'CERTIFICATE_ISSUED';
+  const rtrwApproved = ![
+    'DRAFT_ENCRYPTED',
+    'AWAITING_RTRW_APPROVAL',
+  ].includes(surat.statusVerifikasi);
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -52,16 +57,22 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
       <div className="border-b border-slate-200 pb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-300">
-              Salinan Akta Kematian Sah
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+              certificateIssued
+                ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                : 'bg-blue-100 text-blue-950 border-blue-300'
+            }`}>
+              {certificateIssued ? 'Akta Kematian Diterbitkan' : 'Status Pengajuan'}
             </span>
             <span className="text-xs font-mono text-slate-600">ID: {surat.noRegis}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-            Kutipan Akta Kematian Digital: {surat.namaAlmarhum}
+            {certificateIssued ? 'Akta Kematian Digital' : 'Status Pengajuan Surat Kematian'}: {surat.namaAlmarhum}
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
-            Halaman rute dinamis terverifikasi kriptografis SPBE sesuai standar Kementerian Dalam Negeri dan Dinas Kependudukan dan Pencatatan Sipil.
+            {certificateIssued
+              ? 'Data pengajuan telah diterbitkan sebagai akta oleh petugas Dukcapil.'
+              : 'Halaman ini menampilkan tahap persetujuan pengajuan. Ini belum merupakan akta resmi dan belum dapat digunakan sebagai dokumen kependudukan.'}
           </p>
         </div>
 
@@ -75,11 +86,30 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
         className="rounded-2xl border border-amber-300 bg-amber-50 p-5 sm:p-6 text-amber-950"
       >
         <h2 id="record-status-title" className="text-sm font-bold">
-          Status Data Database
+          Status Persetujuan dan Penerbitan
         </h2>
-        <p className="mt-2 text-xs leading-relaxed">
-          Data pengajuan dan status tersimpan di database. Tanda tangan digital, hash, serta validasi QR belum diaktifkan pada tahap ini.
-        </p>
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+          <div>
+            <dt className="font-semibold">Persetujuan RT/RW</dt>
+            <dd>{rtrwApproved ? 'Disetujui' : 'Belum disetujui'}</dd>
+          </div>
+          <div>
+            <dt className="font-semibold">Penerbitan Dukcapil</dt>
+            <dd>
+              {certificateIssued
+                ? 'Akta telah diterbitkan'
+                : surat.statusVerifikasi === 'PROCESSING_DUKCAPIL'
+                  ? 'Sedang diproses'
+                  : 'Belum diterbitkan'}
+            </dd>
+          </div>
+        </dl>
+        {!certificateIssued && (
+          <p className="mt-3 text-xs leading-relaxed">
+            Status alur saat ini: <strong>{surat.statusVerifikasi}</strong>. Persetujuan
+            RT/RW saja belum menerbitkan akta; pengajuan masih perlu diproses Dukcapil.
+          </p>
+        )}
       </section>
 
       {/* Certificate data preview */}
@@ -93,17 +123,19 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
             🦅
           </div>
           <h2 id="cert-card-title" className="text-lg sm:text-xl font-black text-slate-900 tracking-wider uppercase">
-            Republik Indonesia
+            {certificateIssued ? 'Republik Indonesia' : 'Ringkasan Pengajuan'}
           </h2>
           <h3 className="text-sm sm:text-base font-extrabold text-slate-800 tracking-wide uppercase">
-            Pratinjau Data Akta Kematian
+            {certificateIssued ? 'Pratinjau Data Akta Kematian' : 'Belum diterbitkan sebagai akta'}
           </h3>
           <p className="text-xs text-slate-600 font-mono">
             Nomor: {surat.penerbitanDukcapil?.nomorAkta || 'Belum tersedia'}
           </p>
-          <p className="text-[11px] text-slate-500">
-            Dinas Kependudukan dan Pencatatan Sipil {surat.kota}
-          </p>
+          {certificateIssued && (
+            <p className="text-[11px] text-slate-500">
+              Dinas Kependudukan dan Pencatatan Sipil {surat.kota}
+            </p>
+          )}
         </div>
 
         {/* Certificate Body Data */}
@@ -150,7 +182,9 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
               </div>
               <div>
                 <span>Status Akta: </span>
-                <strong className="text-amber-800 font-semibold">Pratinjau data database</strong>
+                <strong className={certificateIssued ? 'text-emerald-800 font-semibold' : 'text-amber-800 font-semibold'}>
+                  {certificateIssued ? 'Diterbitkan' : 'Belum diterbitkan'}
+                </strong>
               </div>
             </div>
           </div>
@@ -163,24 +197,40 @@ export default async function DynamicCertificatePage({ params }: DynamicCertific
               QR belum tersedia
             </div>
             <div className="space-y-1 text-xs text-slate-600">
-              <strong className="block text-slate-900 font-bold">Validasi elektronik belum aktif</strong>
-              <span className="text-[11px] block">Tanda tangan dan QR resmi akan disiapkan pada tahap berikutnya.</span>
+              <strong className="block text-slate-900 font-bold">
+                {certificateIssued ? 'QR belum tersedia' : 'Akta belum diterbitkan'}
+              </strong>
+              <span className="text-[11px] block">
+                {certificateIssued
+                  ? 'Validasi QR belum diaktifkan pada tahap ini.'
+                  : 'Data ini hanya ringkasan pengajuan, bukan dokumen resmi.'}
+              </span>
             </div>
           </div>
 
           {/* Official Officer Endorsement */}
           <div className="text-right space-y-1 text-xs">
-            <span className="text-slate-500 block">Diterbitkan di {surat.kota}</span>
-            <span className="text-slate-500 block">Pada tanggal: {surat.penerbitanDukcapil?.tanggalTerbit || surat.tanggalWafat}</span>
-            <div className="pt-4 font-bold text-slate-900 text-sm">
-              Kepala Dinas Kependudukan &amp; Pencatatan Sipil
-            </div>
-            <div className="font-bold text-slate-900 underline text-sm">
-              {surat.penerbitanDukcapil?.namaPejabat || 'Belum tersedia'}
-            </div>
-            <span className="text-[11px] font-mono text-slate-600 block">
-              NIP. {surat.penerbitanDukcapil?.nipPejabat || 'Belum tersedia'}
-            </span>
+            {certificateIssued ? (
+              <>
+                <span className="text-slate-500 block">Diterbitkan di {surat.kota}</span>
+                <span className="text-slate-500 block">
+                  Pada tanggal: {surat.penerbitanDukcapil?.tanggalTerbit || 'Belum tersedia'}
+                </span>
+                <div className="pt-4 font-bold text-slate-900 text-sm">
+                  Kepala Dinas Kependudukan &amp; Pencatatan Sipil
+                </div>
+                <div className="font-bold text-slate-900 underline text-sm">
+                  {surat.penerbitanDukcapil?.namaPejabat || 'Belum tersedia'}
+                </div>
+                <span className="text-[11px] font-mono text-slate-600 block">
+                  NIP. {surat.penerbitanDukcapil?.nipPejabat || 'Belum tersedia'}
+                </span>
+              </>
+            ) : (
+              <p className="font-semibold text-amber-800">
+                Menunggu proses penerbitan oleh Dukcapil
+              </p>
+            )}
           </div>
         </div>
 
